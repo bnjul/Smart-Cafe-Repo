@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cafe IoT Dashboard</title>
+<script>
+  (() => {
+    const savedTheme = localStorage.getItem('cafe-theme');
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+  })();
+</script>
+<link rel="stylesheet" href="/css/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot pulse"></span>
+      <h1>Cafe IoT Control Center</h1>
+    </div>
+    <div class="topbar-right">
+      <span id="conn-indicator" class="badge badge-offline">Connecting…</span>
+      <span id="clock" class="clock"></span>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark theme">Dark mode</button>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- Node status -->
+    <section class="card span-2">
+      <h2>Nodes Active</h2>
+      <div class="big-number" id="nodes-active">0 / 6</div>
+      <div class="node-list" id="node-list">
+        <div class="node-pill" data-node="hub"><span class="dot"></span>Hub</div>
+        <div class="node-pill" data-node="door"><span class="dot"></span>Door</div>
+        <div class="node-pill" data-node="env"><span class="dot"></span>Env</div>
+        <div class="node-pill" data-node="control"><span class="dot"></span>Control</div>
+        <div class="node-pill" data-node="camera"><span class="dot"></span>Camera</div>
+        <div class="node-pill" data-node="fridge"><span class="dot"></span>Fridge</div>
+      </div>
+    </section>
+
+    <!-- Customer counters -->
+    <section class="card span-2">
+      <h2>Customers Today</h2>
+      <div class="counter-row">
+        <div class="counter">
+          <div class="counter-value" id="cust-in">0</div>
+          <div class="counter-label">IN</div>
+        </div>
+        <div class="counter">
+          <div class="counter-value" id="cust-out">0</div>
+          <div class="counter-label">OUT</div>
+        </div>
+        <div class="counter accent">
+          <div class="counter-value" id="cust-inside">0</div>
+          <div class="counter-label">ON FLOOR</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live environment -->
+    <section class="card span-2">
+      <h2>Live Environment</h2>
+      <div class="env-row">
+        <div class="env-stat">
+          <div class="env-value" id="env-temp">--</div>
+          <div class="env-label">°C Temp</div>
+        </div>
+        <div class="env-stat">
+          <div class="env-value" id="env-hum">--</div>
+          <div class="env-label">% Humidity</div>
+        </div>
+        <div class="env-stat">
+          <div class="env-value" id="env-smoke">--</div>
+          <div class="env-label">Smoke (raw)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AC control -->
+    <section class="card">
+      <h2>AC / Climate Control</h2>
+      <div class="ac-status">
+        <span id="ac-badge" class="badge badge-off">OFF</span>
+      </div>
+      <div class="ac-buttons">
+        <button id="ac-on-btn" class="btn btn-on">Turn ON</button>
+        <button id="ac-off-btn" class="btn btn-off">Turn OFF</button>
+      </div>
+      <p class="hint">Manual override — automatic hysteresis control on the Hub may re-trigger on the next reading.</p>
+    </section>
+
+    <!-- Threshold settings -->
+    <section class="card">
+      <h2>Temperature Threshold</h2>
+      <label class="field">
+        Turn ON at (°C)
+        <input type="number" id="on-temp-input" step="0.5" />
+      </label>
+      <label class="field">
+        Turn OFF at (°C)
+        <input type="number" id="off-temp-input" step="0.5" />
+      </label>
+      <button id="save-threshold-btn" class="btn btn-primary">Save Threshold</button>
+      <p class="hint" id="threshold-status"></p>
+    </section>
+
+    <!-- Refrigerator -->
+    <section class="card span-2" id="fridge-card">
+      <h2>Refrigerator</h2>
+      <div class="fridge-row">
+        <div class="fridge-stat">
+          <div class="fridge-label">Supply</div>
+          <span id="fridge-power" class="badge badge-unknown">UNKNOWN</span>
+        </div>
+        <div class="fridge-stat">
+          <div class="fridge-label">Door</div>
+          <span id="fridge-door" class="badge badge-unknown">UNKNOWN</span>
+        </div>
+        <div class="fridge-stat">
+          <div class="fridge-label">Open for</div>
+          <div class="fridge-duration" id="fridge-duration">&mdash;</div>
+        </div>
+        <div class="fridge-stat">
+          <div class="fridge-label">Temperature</div>
+          <div id="fridge-temperature">&mdash;</div>
+        </div>
+        <div class="fridge-stat">
+          <div class="fridge-label">Humidity</div>
+          <div id="fridge-humidity">&mdash;</div>
+        </div>
+        <div class="fridge-stat">
+          <div class="fridge-label">Sensor</div>
+          <span id="fridge-sensor" class="badge badge-unknown">UNKNOWN</span>
+        </div>
+      </div>
+      <div class="fridge-footer">
+        <span id="fridge-controller" class="badge badge-offline">Controller OFFLINE</span>
+        <span class="hint" id="fridge-last-update">No update received yet</span>
+      </div>
+      <p class="hint">Supply shows whether mains voltage is present at the monitored point only &mdash; not that the compressor is running. UNKNOWN means the controller is offline or its data is stale, not that power is off.</p>
+    </section>
+
+    <section class="card span-2">
+      <h2>Fridge Alerts</h2>
+      <ul class="alert-list" id="fridge-alerts">
+        <li class="hint">No alerts yet.</li>
+      </ul>
+    </section>
+
+    <!-- Chart -->
+    <section class="card span-4">
+      <h2>Temperature &amp; Humidity History (24h)</h2>
+      <canvas id="history-chart" height="90"></canvas>
+    </section>
+
+    <!-- Photo history -->
+    <section class="card span-4">
+      <div class="section-heading">
+        <h2>Customer Capture History</h2>
+        <div class="photo-actions">
+          <label class="select-all">
+            <input type="checkbox" id="select-all-photos" />
+            Select all
+          </label>
+          <button id="delete-photos-btn" class="btn btn-off photo-delete-btn" type="button" disabled>Delete selected</button>
+        </div>
+      </div>
+      <div class="photo-grid" id="photo-grid">
+        <p class="hint">No photos yet.</p>
+      </div>
+      <button id="view-more-photos-btn" class="btn btn-primary view-more-btn" type="button" hidden>View more</button>
+    </section>
+
+  </main>
+
+  <div class="photo-modal" id="photo-modal" hidden>
+    <div class="photo-modal-backdrop" data-close-photo-modal></div>
+    <div class="photo-modal-content" role="dialog" aria-modal="true" aria-labelledby="photo-modal-title">
+      <button class="photo-modal-close" type="button" aria-label="Close photo preview" data-close-photo-modal>&times;</button>
+      <h2 id="photo-modal-title">Photo preview</h2>
+      <img id="photo-modal-image" alt="Expanded customer capture" />
+      <div class="photo-modal-actions">
+        <button id="photo-modal-delete" class="btn btn-off" type="button">Delete photo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
