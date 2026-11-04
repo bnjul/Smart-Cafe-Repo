@@ -221,10 +221,9 @@ const PHOTO_PAGE_SIZE = 30;
 function photoMarkup(photo) {
   return `
     <div class="photo-item" data-photo-id="${photo._id}">
-      <input class="photo-select" type="checkbox" aria-label="Select photo captured ${new Date(photo.timestamp).toLocaleString()}" />
       <img src="${photo.url}" alt="Customer ${photo.reason} capture" loading="lazy" />
       <div class="photo-hover-actions">
-        <button class="photo-action-btn" type="button" data-view-photo aria-label="View photo">View</button>
+        <button class="photo-action-btn photo-expand-btn" type="button" data-view-photo aria-label="Expand photo">↗</button>
         <button class="photo-action-btn photo-action-delete" type="button" data-delete-photo aria-label="Delete photo">Delete</button>
       </div>
       <div class="photo-meta">
@@ -271,7 +270,7 @@ async function deletePhotos(ids) {
 }
 
 function updatePhotoActions() {
-  const selected = document.querySelectorAll('.photo-select:checked').length;
+  const selected = document.querySelectorAll('.photo-item.selected').length;
   const deleteButton = document.getElementById('delete-photos-btn');
   const selectAll = document.getElementById('select-all-photos');
   deleteButton.disabled = selected === 0;
@@ -307,7 +306,6 @@ function renderPhotos(photos) {
   requestAnimationFrame(updateViewMoreButton);
 }
 
-document.getElementById('photo-grid').addEventListener('change', updatePhotoActions);
 document.getElementById('photo-grid').addEventListener('click', async (event) => {
   const item = event.target.closest('.photo-item');
   if (!item) return;
@@ -329,9 +327,16 @@ document.getElementById('photo-grid').addEventListener('click', async (event) =>
     deleteButton.disabled = false;
   }
 });
+document.getElementById('photo-grid').addEventListener('contextmenu', (event) => {
+  const item = event.target.closest('.photo-item');
+  if (!item) return;
+  event.preventDefault();
+  item.classList.toggle('selected');
+  updatePhotoActions();
+});
 document.getElementById('select-all-photos').addEventListener('change', (event) => {
-  document.querySelectorAll('.photo-select').forEach((checkbox) => {
-    checkbox.checked = event.target.checked;
+  document.querySelectorAll('.photo-item').forEach((item) => {
+    item.classList.toggle('selected', event.target.checked);
   });
   updatePhotoActions();
 });
@@ -371,8 +376,8 @@ document.getElementById('view-more-photos-btn').addEventListener('click', async 
   updateViewMoreButton();
 });
 document.getElementById('delete-photos-btn').addEventListener('click', async () => {
-  const ids = [...document.querySelectorAll('.photo-select:checked')]
-    .map((checkbox) => checkbox.closest('.photo-item').dataset.photoId);
+  const ids = [...document.querySelectorAll('.photo-item.selected')]
+    .map((item) => item.dataset.photoId);
   if (!ids.length) return;
   if (!window.confirm(`Delete ${ids.length} selected photo${ids.length === 1 ? '' : 's'}?`)) return;
 
